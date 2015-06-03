@@ -23,6 +23,8 @@ from misopy.settings import Settings, load_settings
 from misopy.settings import miso_path as miso_settings_path
 import misopy.cluster_utils as cluster_utils
 
+import pysplicing
+
 miso_path = os.path.dirname(os.path.abspath(__file__))
 manual_url = "http://genes.mit.edu/burgelab/miso/docs/"
 
@@ -83,7 +85,8 @@ class GenesDispatcher:
                  sge_job_name="misojob",
                  gene_ids=None,
                  num_proc=None,
-                 wait_on_jobs=True):
+                 wait_on_jobs=True,
+                 prior="dirichlet"):
         self.main_logger = main_logger
         self.threads = {}
         self.gff_dir = gff_dir
@@ -101,6 +104,7 @@ class GenesDispatcher:
                 self.main_logger.warning("Are you sure your BAM file is indexed?")
         self.output_dir = output_dir
         self.read_len = read_len
+        self.prior = prior
         # For now setting overhang to 1 always
         #self.overhang_len = overhang_len
         self.overhang_len = 1
@@ -208,12 +212,13 @@ class GenesDispatcher:
         for batch_num, batch in enumerate(batch_filenames):
             batch_filename, batch_size = batch
             miso_cmd = \
-              "python %s --compute-genes-from-file \"%s\" %s %s --read-len %d " \
+              "python %s --compute-genes-from-file \"%s\" %s %s --read-len %d --prior %s " \
                     %(miso_run,
                       batch_filename,
                       ' '.join(self.bam_filename),
                       self.output_dir,
-                      self.read_len)
+                      self.read_len,
+                      self.prior)
             # Add paired-end parameters and read len/overhang len
             if self.paired_end != None:
                 # Run in paired-end mode
@@ -354,7 +359,8 @@ def compute_all_genes_psi(gff_dir, bam_filename, read_len,
                           job_name="misojob",
                           num_proc=None,
                           prefilter=False,
-                          wait_on_jobs=True):
+                          wait_on_jobs=True,
+                          prior="dirichlet"):
     """
     Compute Psi values for genes using a GFF and a BAM filename.
 
@@ -432,7 +438,8 @@ def compute_all_genes_psi(gff_dir, bam_filename, read_len,
                                  SGEarray=SGEarray,
                                  gene_ids=all_gene_ids,
                                  num_proc=num_proc,
-                                 wait_on_jobs=wait_on_jobs)
+                                 wait_on_jobs=wait_on_jobs,
+                                 prior=prior)
     dispatcher.run()
 
 
@@ -528,6 +535,11 @@ def main(argv = None):
                       action="store_true",
                       help="If passed in, do not wait on cluster jobs after " \
                       "they are submitted. By default, wait.")
+    parser.add_option("--prior", dest="prior", nargs=1, default="dirichlet",
+                      help="Prior to use for the expression profiles "
+                      "defaults to a Dirichlet prior. The other choice "
+                      "is a Logistic prior, only implemented for "
+                      "two-isoform genes currently")
     ##
     ## Gene utilities
     ##
@@ -539,6 +551,12 @@ def main(argv = None):
     (options, args) = parser.parse_args(argv)
 
     greeting()
+
+    options.prior = options.prior.lower()
+    if options.prior != "dirichlet" and options.prior != "logistic":
+        print("Error: unkown prior: '", options.prior,
+              "', much be 'dirichlet' or 'logistic'")
+        sys.exit(1)
 
     if options.version:
         print "MISO version %s\n" %(misopy.__version__)
@@ -617,7 +635,8 @@ def main(argv = None):
                               settings_fname=settings_filename,
                               prefilter=options.prefilter,
                               num_proc=options.num_proc,
-                              wait_on_jobs=wait_on_jobs)
+                              wait_on_jobs=wait_on_jobs,
+                              prior=options.prior)
 
     if options.view_gene != None:
         indexed_gene_filename = \

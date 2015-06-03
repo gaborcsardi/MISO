@@ -1,4 +1,3 @@
-
 import os
 import sys
 import shutil
@@ -47,7 +46,8 @@ def miso_cli(sams = None, gff = None):
         # Run MISO
         from misopy import miso
         miso_args = ["--run", "indexed"] + bams + \
-                    ["--output-dir", "output", "--read-len", "36"]
+                    ["--output-dir", "output", "--read-len", "36"] + \
+                    ["--prior", "logistic"]
         miso.main(miso_args)
 
         # Summarize
@@ -57,16 +57,16 @@ def miso_cli(sams = None, gff = None):
         os.chdir(curdir)
 
 def test_miso_cli():
-    miso_cli()
-
-@raises(SystemExit)
-def test_error_if_multiple_bam_files():
+    """This is a very artificial test, actually, all it can do is 
+    ensuring that the replicate code runs, even if samples are very
+    similar, if this case they are exactly the same"""
     import misopy
     miso_dir = misopy.__path__[0]
     test_sam = os.path.join(miso_dir, "test-data", "sam-data",
                             "c2c12.Atp2b1.sam")
     test_sam2 = os.path.join(os.path.dirname(test_sam),
                              "c2c12.Atp2b1-2.sam")
+
     try:
         shutil.copyfile(test_sam, test_sam2)
         miso_cli(sams = [test_sam, test_sam2])
